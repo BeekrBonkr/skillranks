@@ -1,0 +1,53 @@
+# Placeholder to detect their skill. This is used for the ranges down below in the config file to give them a rank based on their skill.
+placeholder-to-listen-for: "%math_0_{mbedwars_stats-wl}*100+{mbedwars_stats-final_kills}*20+{mbedwars_stats-kd}*50+{mbedwars_stats-wins}*10+{mbedwars_stats-beds_destroyed}*80%"
+#command a player can run to update their rank
+#can use a joincommand plugin for this
+command: "updaterank"
+
+ranks:
+  # Please make sure you list the highest rank in order first.
+  rank:
+    permission: "perm.node" #permission node needed to allow the player to update their rank on this specific rank progression
+    skills:
+      1:
+        name: "&f&lInfinite"
+        message: "Your rank has been updated to %name%"
+        range: ">3000"
+        add-command:
+          - "lp user %player% permission set group.infinite"
+        remove-command:
+          - "lp user %player% permission unset group.infinite"
+      2:
+        name: "&f&lOxidized"
+        message: "Your rank has been updated to %name%"
+        range: "100-399"
+        add-command:
+          - "lp user %player% permission set group.oxidized"
+        remove-command:
+          - "lp user %player% permission unset group.oxidized"
+      3:
+        name: "&f&lUnranked" #will be used in the message
+        message: "Your rank has been updated to %name%" #message that will be sent to the player when their rank has been set
+        range: "<99" #int required range to have the group
+        add-command: #can list more than one command
+          - "lp user %player% permission set group.unranked"
+        remove-command:
+          - "lp user %player% permission unset group.unranked"
+  example-rank-tree: #can be copied and named something else to allow for multiple rank progressions
+    permission: "perm.node.2" #permission node needed to allow the player to update their rank on this specific rank progression
+    skills:
+      1:
+        name: "example" #will be used in the message
+        message: "example" #message that will be sent to the player when their rank has been set
+        range: "<69420" #int required range to have the group
+        add-command: #can list more than one command
+          - "give %player% 500 dirt"
+        remove-command:
+          - "kill %player"
+
+lang:
+  player-only: "&Only players can execute this command!"
+  no-permission: "&cYou do not have permission to execute this command!"
+  invalid-rank: "&cCannot find that rank type!"
+  no-ranking: "&cNo rank could be assigned!"
+  nothing-changed: "&cNothing changed, you are still the same rank!"
