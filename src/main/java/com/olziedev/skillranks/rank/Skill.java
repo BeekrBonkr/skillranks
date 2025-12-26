@@ -1,5 +1,5 @@
 package com.olziedev.skillranks.rank;
-
+import com.olziedev.skillranks.rank.range.CompiledRange;
 import com.olziedev.skillranks.SkillRanks;
 import com.olziedev.skillranks.rank.range.RangeParser;
 import com.olziedev.skillranks.utils.Utils;
@@ -13,7 +13,16 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Function;
 
-public record Skill(String id, String name, String message, String range, List<String> addCommand, List<String> removeCommand, NamespacedKey key) {
+public record Skill(
+        String id,
+        String name,
+        String message,
+        String range,
+        CompiledRange compiledRange,
+        List<String> addCommand,
+        List<String> removeCommand,
+        NamespacedKey key
+) {
 
     public static List<Skill> parseList(ConfigurationSection skills) {
         List<Skill> skillList = new ArrayList<>();
@@ -23,14 +32,17 @@ public record Skill(String id, String name, String message, String range, List<S
             ConfigurationSection section = skills.getConfigurationSection(rank);
             if (section == null) continue;
 
+            String range = section.getString("range", "");
             skillList.add(new Skill(rank,
                     section.getString("name", ""),
                     section.getString("message", ""),
-                    section.getString("range", ""),
+                    range,
+                    CompiledRange.parse(range),
                     section.getStringList("add-command"),
                     section.getStringList("remove-command"),
                     new NamespacedKey(SkillRanks.getInstance(), "rank-" + rank.toLowerCase())
             ));
+
         }
         return skillList;
     }
@@ -62,11 +74,11 @@ public record Skill(String id, String name, String message, String range, List<S
 
     public boolean meetsRange(int level) {
         try {
-            RangeParser rangeParser = RangeParser.getRangeParser(this.range);
-            return rangeParser.isInRange(level, this.range);
+            return this.compiledRange != null && this.compiledRange.contains(level);
         } catch (Exception e) {
             SkillRanks.getInstance().getLogger().warning("Invalid range for rank " + id + " (" + range + ")");
             return false;
         }
     }
+
 }

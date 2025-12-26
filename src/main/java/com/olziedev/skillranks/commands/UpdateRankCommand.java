@@ -7,8 +7,8 @@ import com.olziedev.skillranks.rank.RankSection;
 import com.olziedev.skillranks.rank.Skill;
 import com.olziedev.skillranks.utils.Configuration;
 import com.olziedev.skillranks.utils.Utils;
-import me.clip.placeholderapi.PlaceholderAPI;
 import org.bukkit.entity.Player;
+import com.olziedev.skillranks.SkillRanks;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -48,13 +48,16 @@ public class UpdateRankCommand extends FrameworkCommand {
                 .filter(x -> x.hasRank(player))
                 .findFirst()
                 .orElse(null);
+
         int level;
         try {
-            level = Integer.parseInt(PlaceholderAPI.setPlaceholders(player, this.placeholder));
+            long ttlMs = Configuration.getConfig().getLong("placeholder-cache-ms", 2000L);
+            level = SkillRanks.getInstance().getCachedPlaceholderInt(player, this.placeholder, ttlMs);
         } catch (NumberFormatException e) {
             plugin.getLogger().warning("Invalid placeholder value, it must be a number: " + e.getMessage());
             return;
         }
+
         rank.skills()
                 .stream()
                 .filter(x -> x.meetsRange(level))
