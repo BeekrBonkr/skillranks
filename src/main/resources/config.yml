@@ -4,6 +4,8 @@ placeholder-to-listen-for: "%math_0_{mbedwars_stats-wl}*100+{mbedwars_stats-fina
 #can use a joincommand plugin for this
 command: "updaterank"
 
+placeholder-cache-ms: 2000
+
 ranks:
   # Please make sure you list the highest rank in order first.
   rank:

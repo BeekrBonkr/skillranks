@@ -6,6 +6,11 @@ import com.olziedev.skillranks.utils.Configuration;
 import com.olziedev.skillranks.utils.Utils;
 import org.bukkit.Bukkit;
 import org.bukkit.plugin.java.JavaPlugin;
+import me.clip.placeholderapi.PlaceholderAPI;
+import org.bukkit.entity.Player;
+
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class SkillRanks extends JavaPlugin {
 
@@ -30,6 +35,7 @@ public class SkillRanks extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        placeholderCache.clear();
         Bukkit.getScheduler().cancelTasks(this);
         instance = null;
     }
@@ -37,4 +43,31 @@ public class SkillRanks extends JavaPlugin {
     public static SkillRanks getInstance() {
         return instance;
     }
+
+    private static final class PlaceholderCacheEntry {
+        final long ts;
+        final int value;
+        PlaceholderCacheEntry(long ts, int value) {
+            this.ts = ts;
+            this.value = value;
+        }
+    }
+
+    private final ConcurrentHashMap<UUID, PlaceholderCacheEntry> placeholderCache = new ConcurrentHashMap<>();
+
+    public int getCachedPlaceholderInt(Player player, String placeholder, long ttlMs) throws NumberFormatException {
+        long now = System.currentTimeMillis();
+        UUID uuid = player.getUniqueId();
+
+        PlaceholderCacheEntry entry = placeholderCache.get(uuid);
+        if (entry != null && (now - entry.ts) <= ttlMs) {
+            return entry.value;
+        }
+
+        String raw = PlaceholderAPI.setPlaceholders(player, placeholder);
+        int parsed = Integer.parseInt(raw.trim());
+        placeholderCache.put(uuid, new PlaceholderCacheEntry(now, parsed));
+        return parsed;
+    }
+
 }
