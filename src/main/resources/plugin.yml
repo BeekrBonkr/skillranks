@@ -1,0 +1,5 @@
+name: ${project.name}
+main: com.olziedev.skillranks.SkillRanks
+version: ${project.version}
+author: Olzie
+api-version: 1.13
