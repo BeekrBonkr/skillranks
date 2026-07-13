@@ -4,7 +4,7 @@ import com.olziedev.olziecommand.v1_3_3.framework.CommandExecutor;
 import com.olziedev.olziecommand.v1_3_3.framework.ExecutorType;
 import com.olziedev.olziecommand.v1_3_3.framework.api.FrameworkCommand;
 import com.olziedev.skillranks.rank.RankSection;
-import com.olziedev.skillranks.rank.Skill;
+import com.olziedev.skillranks.rank.RankService;
 import com.olziedev.skillranks.utils.Configuration;
 import com.olziedev.skillranks.utils.Utils;
 import org.bukkit.entity.Player;
@@ -23,8 +23,8 @@ public class UpdateRankCommand extends FrameworkCommand {
         this.setPermissions("skillranks.updaterank");
         this.setExecutorType(ExecutorType.PLAYER_ONLY);
         this.setRunAsync(false);
-        this.placeholder = Configuration.getConfig().getString("placeholder-to-listen-for");
-        this.rankSections = RankSection.parse(Configuration.getConfig().getConfigurationSection("ranks"));
+        this.placeholder = SkillRanks.getInstance().getPlaceholder();
+        this.rankSections = SkillRanks.getInstance().getRankSections();
     }
 
     @Override
@@ -43,37 +43,21 @@ public class UpdateRankCommand extends FrameworkCommand {
             Utils.sendMessage(cmd.getSender(), Configuration.getConfig().getString("lang.invalid-rank"));
             return;
         }
-        Skill skill = rank.skills()
-                .stream()
-                .filter(x -> x.hasRank(player))
-                .findFirst()
-                .orElse(null);
 
-        int level;
-        try {
-            long ttlMs = Configuration.getConfig().getLong("placeholder-cache-ms", 2000L);
-            level = SkillRanks.getInstance().getCachedPlaceholderInt(player, this.placeholder, ttlMs);
-        } catch (NumberFormatException e) {
-            plugin.getLogger().warning("Invalid placeholder value, it must be a number: " + e.getMessage());
-            return;
+        long ttlMs = Configuration.getConfig().getLong("placeholder-cache-ms", 2000L);
+        RankService.Result result = RankService.updateRank(player, rank, this.placeholder, ttlMs);
+        if (result == RankService.Result.UNCHANGED) {
+            Utils.sendMessage(player, Configuration.getConfig().getString("lang.nothing-changed"));
+        } else if (result == RankService.Result.NO_MATCH) {
+            Utils.sendMessage(player, Configuration.getConfig().getString("lang.no-rank"));
         }
-
-        rank.skills()
-                .stream()
-                .filter(x -> x.meetsRange(level))
-                .findFirst()
-                .ifPresentOrElse(x -> {
-                    if (x.hasRank(player)) {
-                        Utils.sendMessage(player, Configuration.getConfig().getString("lang.nothing-changed"));
-                        return;
-                    }
-                    if (skill != null) skill.removeRank(player);
-                    x.giveRank(player);
-                }, () -> Utils.sendMessage(player, Configuration.getConfig().getString("lang.no-rank")));
     }
 
     @Override
     public List<String> onTabComplete(CommandExecutor cmd) {
-        return this.rankSections.stream().filter(x -> !x.permission().isEmpty() && cmd.getSender().hasPermission(x.permission())).map(RankSection::id).collect(Collectors.toList());
+        return this.rankSections.stream()
+                .filter(x -> x.permission().isEmpty() || cmd.getSender().hasPermission(x.permission()))
+                .map(RankSection::id)
+                .collect(Collectors.toList());
     }
 }

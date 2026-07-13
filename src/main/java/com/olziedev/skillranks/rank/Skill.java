@@ -1,7 +1,6 @@
 package com.olziedev.skillranks.rank;
 import com.olziedev.skillranks.rank.range.CompiledRange;
 import com.olziedev.skillranks.SkillRanks;
-import com.olziedev.skillranks.rank.range.RangeParser;
 import com.olziedev.skillranks.utils.Utils;
 import org.bukkit.Bukkit;
 import org.bukkit.NamespacedKey;
@@ -24,7 +23,7 @@ public record Skill(
         NamespacedKey key
 ) {
 
-    public static List<Skill> parseList(ConfigurationSection skills) {
+    public static List<Skill> parseList(ConfigurationSection skills, String rankSectionId) {
         List<Skill> skillList = new ArrayList<>();
         if (skills == null) return skillList;
 
@@ -40,7 +39,7 @@ public record Skill(
                     CompiledRange.parse(range),
                     section.getStringList("add-command"),
                     section.getStringList("remove-command"),
-                    new NamespacedKey(SkillRanks.getInstance(), "rank-" + rank.toLowerCase())
+                    new NamespacedKey(SkillRanks.getInstance(), "rank-" + rankSectionId.toLowerCase() + "-" + rank.toLowerCase())
             ));
 
         }

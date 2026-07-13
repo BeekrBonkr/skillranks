@@ -1,22 +1,108 @@
-# Placeholder to detect their skill. This is used for the ranges down below in the config file to give them a rank based on their skill.
-placeholder-to-listen-for: "%math_0_{mbedwars_stats-wl}*100+{mbedwars_stats-final_kills}*20+{mbedwars_stats-kd}*50+{mbedwars_stats-wins}*10+{mbedwars_stats-beds_destroyed}*80%"
-#command a player can run to update their rank
-#can use a joincommand plugin for this
-command: "updaterank"
+##############################################################################
+# SkillRanks
+#
+# SkillRanks grants a player a "rank" (a permission group, or any set of
+# commands you configure) based on the numeric value of a PlaceholderAPI
+# placeholder - for example a stat, score, or a computed rating pulled
+# from another plugin.
+#
+# Ranks are organised into independent "rank trees" under the `ranks:`
+# section below. Each tree is a self-contained progression - a player can
+# only ever hold ONE rank within a given tree at a time. Define as many
+# trees as you like (e.g. one for combat skill, one for economy rank,
+# etc.) by copying the `example-rank-tree` block and renaming it.
+#
+# A player's rank can be (re)checked in two ways:
+#   1. Manually, via the `command` below (e.g. "/updaterank rank").
+#   2. Automatically, via the `auto-check` section below - on join and/or
+#      on a repeating timer, with no player action required.
+##############################################################################
 
+# Internal - do not edit. Used to detect and migrate older config files
+# on plugin update; a stale/missing value here just means your config
+# predates versioning and will be migrated automatically on next start.
+config-version: 2
+
+# Enables extra logging (one line per automatic/manual rank check) to
+# help you debug your `range` values and placeholder math. Safe to leave
+# on while setting the plugin up, noisy for normal use.
+debug: false
+
+# The PlaceholderAPI placeholder whose value determines a player's rank.
+# It must resolve to a whole number, e.g. "0", "123", "-4" (no decimals).
+# If you're using the PlaceholderAPI math expansion, round to 0 decimal
+# places (the "_0_" in "%math_0_{...}%") or parsing will fail and the
+# check will be silently skipped (see `debug` above to catch this).
+placeholder-to-listen-for: "%math_0_{mbedwars_stats-wl}*100+{mbedwars_stats-final_kills}*20+{mbedwars_stats-kd}*50+{mbedwars_stats-wins}*10+{mbedwars_stats-beds_destroyed}*80%"
+
+# How long (in milliseconds) a resolved placeholder value is cached per
+# player before it's re-evaluated. Raise this if your placeholder is
+# expensive to compute; lower it (or set to 0) if you need rank changes
+# to reflect a stat update immediately.
 placeholder-cache-ms: 2000
 
+# The command players run to manually re-check/update their own rank,
+# e.g. "/updaterank <tree>". Requires the "skillranks.updaterank"
+# permission. Can be combined with a "run command on join" plugin, but
+# see `auto-check` below for a built-in alternative that needs no such
+# plugin.
+command: "updaterank"
+
+##############################################################################
+# Automatic rank checks
+#
+# Re-check and update players' ranks in the background, without them
+# needing to run any command. Both options below respect each rank
+# tree's `permission` - a player is only ever auto-promoted into trees
+# they're allowed to use.
+##############################################################################
+auto-check:
+  # Re-check a player's rank shortly after they join the server.
+  on-join: true
+
+  # How long to wait after a player joins before checking (in ticks; 20
+  # ticks = 1 second). A short delay gives other plugins (stat trackers,
+  # stats-from-database plugins, etc.) time to finish loading the
+  # player's data before it's read.
+  join-delay-ticks: 40
+
+  # Periodically re-check every online player's rank in the background.
+  # Set to 0 to disable. Useful for stats that change passively or are
+  # updated by an external source (e.g. a website or database import)
+  # rather than something happening in-game.
+  interval-seconds: 300
+
+##############################################################################
+# Rank trees
+#
+# Each top-level key below (e.g. "rank", "example-rank-tree") is an
+# independent rank progression - list its skills from HIGHEST to LOWEST
+# so overlapping ranges resolve to the best rank a player qualifies for.
+##############################################################################
 ranks:
-  # Please make sure you list the highest rank in order first.
   rank:
-    permission: "perm.node" #permission node needed to allow the player to update their rank on this specific rank progression
+    # Permission required to be eligible for this rank tree at all - for
+    # both the manual command and automatic checks. Leave blank ("") to
+    # make the tree available to everyone.
+    permission: "perm.node"
+
     skills:
       1:
+        # Display name used in messages via %name%. Supports & color codes.
         name: "&f&lInfinite"
+        # Message sent to the player when they're promoted to this rank.
         message: "Your rank has been updated to %name%"
+        # The placeholder value range required for this rank:
+        #   ">N"    greater than N          "<N"   less than N
+        #   ">=N"   greater than or equal    "<=N"  less than or equal
+        #   "N"     exactly N                "N-M"  between N and M (inclusive)
         range: ">3000"
+        # Console command(s) run when a player is promoted TO this rank.
+        # %player% and %name% are replaced.
         add-command:
           - "lp user %player% permission set group.infinite"
+        # Console command(s) run when a player moves AWAY from this rank
+        # (they now qualify for a different rank in the same tree).
         remove-command:
           - "lp user %player% permission unset group.infinite"
       2:
@@ -28,28 +114,45 @@ ranks:
         remove-command:
           - "lp user %player% permission unset group.oxidized"
       3:
-        name: "&f&lUnranked" #will be used in the message
-        message: "Your rank has been updated to %name%" #message that will be sent to the player when their rank has been set
-        range: "<99" #int required range to have the group
-        add-command: #can list more than one command
+        name: "&f&lUnranked"
+        message: "Your rank has been updated to %name%"
+        range: "<99"
+        add-command:
           - "lp user %player% permission set group.unranked"
         remove-command:
           - "lp user %player% permission unset group.unranked"
-  example-rank-tree: #can be copied and named something else to allow for multiple rank progressions
-    permission: "perm.node.2" #permission node needed to allow the player to update their rank on this specific rank progression
+
+  # Copy this block and rename it to add another, independent rank
+  # progression (e.g. tracking a different stat/placeholder combination).
+  example-rank-tree:
+    permission: "perm.node.2"
     skills:
       1:
-        name: "example" #will be used in the message
-        message: "example" #message that will be sent to the player when their rank has been set
-        range: "<69420" #int required range to have the group
-        add-command: #can list more than one command
+        name: "example"
+        message: "example"
+        range: "<69420"
+        add-command:
           - "give %player% 500 dirt"
         remove-command:
-          - "kill %player"
+          - "kill %player%"
 
+##############################################################################
+# Messages
+#
+# All messages support & color codes. Leave a value as "" to disable it.
+##############################################################################
 lang:
-  player-only: "&Only players can execute this command!"
+  # Sent when a non-player (e.g. console) tries to run the command.
+  player-only: "&cOnly players can execute this command!"
+  # Sent when the sender lacks the base "skillranks.updaterank" permission.
   no-permission: "&cYou do not have permission to execute this command!"
+  # Sent when the given rank tree doesn't exist, or the player doesn't
+  # have permission to use it.
   invalid-rank: "&cCannot find that rank type!"
-  no-ranking: "&cNo rank could be assigned!"
+  # Sent when the player doesn't qualify for any rank in the tree.
+  no-rank: "&cNo rank could be assigned!"
+  # Sent when the player already holds the rank they qualify for.
   nothing-changed: "&cNothing changed, you are still the same rank!"
+  # Shown one line at a time when /<command> is run with no arguments.
+  help:
+    - "&7/%cmd% <rank-tree> &f- update your rank for the given rank tree."
