@@ -12,8 +12,9 @@ public record RankSection(String id, String permission, List<Skill> skills) {
         if (section == null) return rankSections;
 
         for (String key : section.getKeys(false)) {
-            String permission = section.getString("permission", "");
-            List<Skill> skills = Skill.parseList(section.getConfigurationSection(key + ".skills"));
+            ConfigurationSection rankSection = section.getConfigurationSection(key);
+            String permission = rankSection.getString("permission", "");
+            List<Skill> skills = Skill.parseList(rankSection.getConfigurationSection("skills"), key);
             rankSections.add(new RankSection(key, permission, skills));
         }
         return rankSections;
