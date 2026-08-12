@@ -17,7 +17,7 @@ public class Configuration {
 
     // Bump whenever config.yml gains/renames/removes a key in a way that
     // an admin's existing on-disk file needs migrating to pick up.
-    public static final int CURRENT_CONFIG_VERSION = 2;
+    public static final int CURRENT_CONFIG_VERSION = 3;
 
     private final JavaPlugin plugin;
     private static FileConfiguration config;
@@ -45,29 +45,16 @@ public class Configuration {
 
         backup(file, fileVersion);
 
-        if (fileVersion < 2) {
-            // "lang.no-ranking" was renamed to "lang.no-rank" (the code
-            // always read the latter, so the old key was dead weight).
-            if (config.contains("lang.no-ranking") && !config.contains("lang.no-rank")) {
-                config.set("lang.no-rank", config.getString("lang.no-ranking"));
-            }
-            config.set("lang.no-ranking", null);
-        }
-
-        // Fill in any newly-introduced keys (auto-check.*, lang.help,
-        // debug, ...) with their shipped defaults, without touching
-        // anything the admin already has set (e.g. their ranks).
+        FileConfiguration defaults = null;
         try (InputStream defaultStream = plugin.getResource("config.yml")) {
             if (defaultStream != null) {
-                FileConfiguration defaults = YamlConfiguration.loadConfiguration(
+                defaults = YamlConfiguration.loadConfiguration(
                         new InputStreamReader(defaultStream, StandardCharsets.UTF_8));
-                config.setDefaults(defaults);
-                config.options().copyDefaults(true);
             }
         } catch (IOException ignored) {
         }
 
-        config.set("config-version", CURRENT_CONFIG_VERSION);
+        applyMigrations(config, defaults);
 
         try {
             config.save(file);
@@ -77,6 +64,59 @@ public class Configuration {
                     + "freshly-documented config.yml for explanations of each option).");
         } catch (IOException e) {
             plugin.getLogger().warning("Failed to save migrated config.yml: " + e.getMessage());
+        }
+    }
+
+    // Static so migration logic can be exercised without a running server.
+    static void applyMigrations(FileConfiguration config, FileConfiguration defaults) {
+        int fileVersion = config.getInt("config-version", 1);
+        if (fileVersion >= CURRENT_CONFIG_VERSION) return;
+
+        if (fileVersion < 2) {
+            // "lang.no-ranking" was renamed to "lang.no-rank" (the code
+            // always read the latter, so the old key was dead weight).
+            if (config.contains("lang.no-ranking") && !config.contains("lang.no-rank")) {
+                config.set("lang.no-rank", config.getString("lang.no-ranking"));
+            }
+            config.set("lang.no-ranking", null);
+        }
+
+        if (fileVersion < 3) {
+            // The single global "placeholder-to-listen-for" became a
+            // per-tree "placeholder" key, so each rank tree can track its
+            // own stat. Existing trees inherit the old global value.
+            String globalPlaceholder = config.getString("placeholder-to-listen-for");
+            ConfigurationSection ranks = config.getConfigurationSection("ranks");
+            if (ranks != null && globalPlaceholder != null && !globalPlaceholder.isEmpty()) {
+                for (String key : ranks.getKeys(false)) {
+                    if (!ranks.isConfigurationSection(key)) continue;
+                    if (!ranks.contains(key + ".placeholder")) {
+                        ranks.set(key + ".placeholder", globalPlaceholder);
+                    }
+                }
+            }
+            config.set("placeholder-to-listen-for", null);
+        }
+
+        copyMissingDefaults(config, defaults);
+        config.set("config-version", CURRENT_CONFIG_VERSION);
+    }
+
+    /**
+     * Fills in newly-introduced keys (auto-check.*, lang.*, debug, ...)
+     * with their shipped defaults without touching anything the admin
+     * already has set. The `ranks` section is deliberately excluded: the
+     * shipped example trees must never be merged into a customized config.
+     */
+    private static void copyMissingDefaults(FileConfiguration config, FileConfiguration defaults) {
+        if (defaults == null) return;
+
+        for (String key : defaults.getKeys(true)) {
+            if (key.equals("ranks") || key.startsWith("ranks.")) continue;
+            if (defaults.isConfigurationSection(key)) continue;
+            if (!config.contains(key)) {
+                config.set(key, defaults.get(key));
+            }
         }
     }
 
@@ -91,16 +131,6 @@ public class Configuration {
 
     public static FileConfiguration getConfig() {
         return config;
-    }
-
-    public static String getString(ConfigurationSection section, String s) {
-        if (section == null) return "";
-
-        return section.getString(s, "");
-    }
-
-    public static String getString(YamlConfiguration config, String s) {
-        return config.getString(s, "");
     }
 
     public static boolean isDebug() {

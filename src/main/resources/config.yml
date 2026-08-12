@@ -7,38 +7,37 @@
 # from another plugin.
 #
 # Ranks are organised into independent "rank trees" under the `ranks:`
-# section below. Each tree is a self-contained progression - a player can
-# only ever hold ONE rank within a given tree at a time. Define as many
-# trees as you like (e.g. one for combat skill, one for economy rank,
-# etc.) by copying the `example-rank-tree` block and renaming it.
+# section below. Each tree tracks its OWN placeholder and is a
+# self-contained progression - a player can only ever hold ONE rank
+# within a given tree at a time. Define as many trees as you like (e.g.
+# one for combat skill, one for economy rank, each driven by a different
+# stat) by copying the `example-rank-tree` block and renaming it.
 #
-# A player's rank can be (re)checked in two ways:
+# A player's rank can be (re)checked in three ways:
 #   1. Manually, via the `command` below (e.g. "/updaterank rank").
 #   2. Automatically, via the `auto-check` section below - on join and/or
 #      on a repeating timer, with no player action required.
+#   3. Force-resynced via "/updaterank <tree> force" (permission
+#      "skillranks.updaterank.force"), which re-runs the add-commands of
+#      the rank the player qualifies for even if it looks unchanged -
+#      useful when the permission plugin's state has drifted (e.g. a
+#      group was removed by hand).
 ##############################################################################
 
 # Internal - do not edit. Used to detect and migrate older config files
 # on plugin update; a stale/missing value here just means your config
 # predates versioning and will be migrated automatically on next start.
-config-version: 2
+config-version: 3
 
 # Enables extra logging (one line per automatic/manual rank check) to
 # help you debug your `range` values and placeholder math. Safe to leave
 # on while setting the plugin up, noisy for normal use.
 debug: false
 
-# The PlaceholderAPI placeholder whose value determines a player's rank.
-# It must resolve to a whole number, e.g. "0", "123", "-4" (no decimals).
-# If you're using the PlaceholderAPI math expansion, round to 0 decimal
-# places (the "_0_" in "%math_0_{...}%") or parsing will fail and the
-# check will be silently skipped (see `debug` above to catch this).
-placeholder-to-listen-for: "%math_0_{mbedwars_stats-wl}*100+{mbedwars_stats-final_kills}*20+{mbedwars_stats-kd}*50+{mbedwars_stats-wins}*10+{mbedwars_stats-beds_destroyed}*80%"
-
 # How long (in milliseconds) a resolved placeholder value is cached per
-# player before it's re-evaluated. Raise this if your placeholder is
-# expensive to compute; lower it (or set to 0) if you need rank changes
-# to reflect a stat update immediately.
+# player (per placeholder) before it's re-evaluated. Raise this if your
+# placeholders are expensive to compute; lower it (or set to 0) if you
+# need rank changes to reflect a stat update immediately.
 placeholder-cache-ms: 2000
 
 # The command players run to manually re-check/update their own rank,
@@ -76,8 +75,12 @@ auto-check:
 # Rank trees
 #
 # Each top-level key below (e.g. "rank", "example-rank-tree") is an
-# independent rank progression - list its skills from HIGHEST to LOWEST
-# so overlapping ranges resolve to the best rank a player qualifies for.
+# independent rank progression driven by its own `placeholder`. List each
+# tree's skills from HIGHEST to LOWEST - the first matching range wins.
+#
+# Make your ranges contiguous (no gaps)! If a player's value matches no
+# range at all, their existing rank in that tree is left untouched - they
+# are NOT demoted - so a gap means players can get stuck on a stale rank.
 ##############################################################################
 ranks:
   rank:
@@ -85,6 +88,14 @@ ranks:
     # both the manual command and automatic checks. Leave blank ("") to
     # make the tree available to everyone.
     permission: "perm.node"
+
+    # The PlaceholderAPI placeholder whose value determines a player's
+    # rank in THIS tree. It must resolve to a whole number, e.g. "0",
+    # "123", "-4" (no decimals). If you're using the PlaceholderAPI math
+    # expansion, round to 0 decimal places (the "_0_" in "%math_0_{...}%")
+    # or parsing will fail and the check will be skipped with a console
+    # warning (see `debug` above for per-check logging).
+    placeholder: "%math_0_{mbedwars_stats-wl}*100+{mbedwars_stats-final_kills}*20+{mbedwars_stats-kd}*50+{mbedwars_stats-wins}*10+{mbedwars_stats-beds_destroyed}*80%"
 
     skills:
       1:
@@ -96,6 +107,8 @@ ranks:
         #   ">N"    greater than N          "<N"   less than N
         #   ">=N"   greater than or equal    "<=N"  less than or equal
         #   "N"     exactly N                "N-M"  between N and M (inclusive)
+        # Negative bounds work too (e.g. "-10--5"). An invalid or
+        # reversed range is logged on startup and never matches.
         range: ">3000"
         # Console command(s) run when a player is promoted TO this rank.
         # %player% and %name% are replaced.
@@ -108,7 +121,7 @@ ranks:
       2:
         name: "&f&lOxidized"
         message: "Your rank has been updated to %name%"
-        range: "100-399"
+        range: "100-3000"
         add-command:
           - "lp user %player% permission set group.oxidized"
         remove-command:
@@ -116,16 +129,19 @@ ranks:
       3:
         name: "&f&lUnranked"
         message: "Your rank has been updated to %name%"
-        range: "<99"
+        range: "<100"
         add-command:
           - "lp user %player% permission set group.unranked"
         remove-command:
           - "lp user %player% permission unset group.unranked"
 
   # Copy this block and rename it to add another, independent rank
-  # progression (e.g. tracking a different stat/placeholder combination).
+  # progression tracking a different placeholder. (This example uses
+  # PlaceholderAPI's Player expansion - /papi ecloud download Player -
+  # but any placeholder that resolves to a whole number works.)
   example-rank-tree:
     permission: "perm.node.2"
+    placeholder: "%player_level%"
     skills:
       1:
         name: "example"
@@ -134,7 +150,7 @@ ranks:
         add-command:
           - "give %player% 500 dirt"
         remove-command:
-          - "kill %player%"
+          - "say %player% no longer holds the example rank"
 
 ##############################################################################
 # Messages
@@ -156,3 +172,4 @@ lang:
   # Shown one line at a time when /<command> is run with no arguments.
   help:
     - "&7/%cmd% <rank-tree> &f- update your rank for the given rank tree."
+    - "&7/%cmd% <rank-tree> force &f- re-apply your current rank's commands."

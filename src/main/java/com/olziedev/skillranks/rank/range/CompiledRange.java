@@ -14,10 +14,16 @@ public final class CompiledRange {
         this.b = b;
     }
 
+    /**
+     * Parses a range expression (">N", ">=N", "<N", "<=N", "N", "N-M").
+     * Returns null if the expression is malformed or the bounds are
+     * reversed (min > max) - callers are expected to warn.
+     */
     public static CompiledRange parse(String raw) {
-        if (raw == null) return new CompiledRange(Type.EXACT, 0, 0);
+        if (raw == null) return null;
 
         String r = raw.trim().replace(" ", "");
+        if (r.isEmpty()) return null;
 
         try {
             if (r.startsWith(">=")) return new CompiledRange(Type.GTE, Integer.parseInt(r.substring(2)), 0);
@@ -25,18 +31,20 @@ public final class CompiledRange {
             if (r.startsWith("<=")) return new CompiledRange(Type.LTE, Integer.parseInt(r.substring(2)), 0);
             if (r.startsWith("<"))  return new CompiledRange(Type.LT,  Integer.parseInt(r.substring(1)), 0);
 
-            int dash = r.indexOf('-');
+            // "N-M" - search from index 1 so a leading '-' is read as a
+            // negative sign, not a separator (e.g. "-10--5").
+            int dash = r.indexOf('-', 1);
             if (dash > 0) {
                 int min = Integer.parseInt(r.substring(0, dash));
                 int max = Integer.parseInt(r.substring(dash + 1));
+                if (min > max) return null;
                 return new CompiledRange(Type.BETWEEN, min, max);
             }
 
             // exact number
             return new CompiledRange(Type.EXACT, Integer.parseInt(r), 0);
         } catch (NumberFormatException ex) {
-            // invalid config range; treat as never matching
-            return new CompiledRange(Type.EXACT, Integer.MIN_VALUE, 0);
+            return null;
         }
     }
 

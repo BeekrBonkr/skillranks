@@ -32,14 +32,29 @@ public record Skill(
             if (section == null) continue;
 
             String range = section.getString("range", "");
+            CompiledRange compiledRange = CompiledRange.parse(range);
+            if (compiledRange == null) {
+                SkillRanks.getInstance().getLogger().warning("Invalid range \"" + range + "\" for skill \"" + rank
+                        + "\" in rank tree \"" + rankSectionId + "\" - this rank will never match.");
+            }
+
+            NamespacedKey key;
+            try {
+                key = new NamespacedKey(SkillRanks.getInstance(), "rank-" + rankSectionId.toLowerCase() + "-" + rank.toLowerCase());
+            } catch (IllegalArgumentException e) {
+                SkillRanks.getInstance().getLogger().warning("Skipping skill \"" + rank + "\" in rank tree \""
+                        + rankSectionId + "\" - its key contains characters Bukkit does not allow: " + e.getMessage());
+                continue;
+            }
+
             skillList.add(new Skill(rank,
                     section.getString("name", ""),
                     section.getString("message", ""),
                     range,
-                    CompiledRange.parse(range),
+                    compiledRange,
                     section.getStringList("add-command"),
                     section.getStringList("remove-command"),
-                    new NamespacedKey(SkillRanks.getInstance(), "rank-" + rankSectionId.toLowerCase() + "-" + rank.toLowerCase())
+                    key
             ));
 
         }
@@ -72,12 +87,7 @@ public record Skill(
     }
 
     public boolean meetsRange(int level) {
-        try {
-            return this.compiledRange != null && this.compiledRange.contains(level);
-        } catch (Exception e) {
-            SkillRanks.getInstance().getLogger().warning("Invalid range for rank " + id + " (" + range + ")");
-            return false;
-        }
+        return this.compiledRange != null && this.compiledRange.contains(level);
     }
 
 }

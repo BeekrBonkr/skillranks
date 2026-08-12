@@ -28,7 +28,7 @@ public class PlayerListener implements Listener {
 
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
             if (player.isOnline()) {
-                RankService.updateAll(player, plugin.getRankSections(), plugin.getPlaceholder(), ttlMs);
+                RankService.updateAll(player, plugin.getRankSections(), ttlMs);
             }
         }, delayTicks);
     }
