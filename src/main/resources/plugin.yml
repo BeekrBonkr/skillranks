@@ -2,4 +2,6 @@ name: ${project.name}
 main: com.olziedev.skillranks.SkillRanks
 version: ${project.version}
 author: Olzie
-api-version: 1.13
+description: Grants ranks based on the numeric value of PlaceholderAPI placeholders.
+api-version: '1.20'
+depend: [PlaceholderAPI]

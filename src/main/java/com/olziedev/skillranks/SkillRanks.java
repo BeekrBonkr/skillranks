@@ -12,6 +12,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 import me.clip.placeholderapi.PlaceholderAPI;
 import org.bukkit.entity.Player;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -21,7 +22,6 @@ public class SkillRanks extends JavaPlugin {
     private static SkillRanks instance;
 
     private List<RankSection> rankSections;
-    private String placeholder;
 
     @Override
     public void onEnable() {
@@ -29,7 +29,6 @@ public class SkillRanks extends JavaPlugin {
         new Configuration(this).load();
 
         this.rankSections = RankSection.parse(Configuration.getConfig().getConfigurationSection("ranks"));
-        this.placeholder = Configuration.getConfig().getString("placeholder-to-listen-for");
 
         new OlzieCommand(this, getClass())
                 .getActionRegister()
@@ -67,40 +66,53 @@ public class SkillRanks extends JavaPlugin {
         return rankSections;
     }
 
-    public String getPlaceholder() {
-        return placeholder;
-    }
-
     private void runPeriodicCheck() {
         long ttlMs = Configuration.getConfig().getLong("placeholder-cache-ms", 2000L);
-        for (Player player : Bukkit.getOnlinePlayers()) {
-            RankService.updateAll(player, rankSections, placeholder, ttlMs);
+        // copy: an add/remove-command could mutate the online-player list
+        for (Player player : new ArrayList<>(Bukkit.getOnlinePlayers())) {
+            RankService.updateAll(player, rankSections, ttlMs);
         }
     }
 
     private static final class PlaceholderCacheEntry {
         final long ts;
-        final int value;
-        PlaceholderCacheEntry(long ts, int value) {
+        final Integer value; // null = did not resolve to a whole number
+
+        PlaceholderCacheEntry(long ts, Integer value) {
             this.ts = ts;
             this.value = value;
         }
     }
 
-    private final ConcurrentHashMap<UUID, PlaceholderCacheEntry> placeholderCache = new ConcurrentHashMap<>();
+    // uuid -> (placeholder expression -> cached result), so trees tracking
+    // different placeholders never see each other's values
+    private final ConcurrentHashMap<UUID, ConcurrentHashMap<String, PlaceholderCacheEntry>> placeholderCache = new ConcurrentHashMap<>();
 
-    public int getCachedPlaceholderInt(Player player, String placeholder, long ttlMs) throws NumberFormatException {
+    /**
+     * Resolves the placeholder for the player, caching the result (including
+     * failures, so a bad value isn't re-resolved and re-warned every check)
+     * for {@code ttlMs}. Returns null if it doesn't resolve to a whole number.
+     */
+    public Integer getCachedPlaceholderInt(Player player, String placeholder, long ttlMs) {
         long now = System.currentTimeMillis();
-        UUID uuid = player.getUniqueId();
+        ConcurrentHashMap<String, PlaceholderCacheEntry> perPlayer =
+                placeholderCache.computeIfAbsent(player.getUniqueId(), k -> new ConcurrentHashMap<>());
 
-        PlaceholderCacheEntry entry = placeholderCache.get(uuid);
+        PlaceholderCacheEntry entry = perPlayer.get(placeholder);
         if (entry != null && (now - entry.ts) <= ttlMs) {
             return entry.value;
         }
 
         String raw = PlaceholderAPI.setPlaceholders(player, placeholder);
-        int parsed = Integer.parseInt(raw.trim());
-        placeholderCache.put(uuid, new PlaceholderCacheEntry(now, parsed));
+        Integer parsed;
+        try {
+            parsed = Integer.parseInt(raw.trim());
+        } catch (NumberFormatException e) {
+            parsed = null;
+            getLogger().warning("Placeholder \"" + placeholder + "\" resolved to \"" + raw + "\" for "
+                    + player.getName() + " - it must be a whole number. Skipping their rank check.");
+        }
+        perPlayer.put(placeholder, new PlaceholderCacheEntry(now, parsed));
         return parsed;
     }
 

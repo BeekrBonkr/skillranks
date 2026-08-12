@@ -15,16 +15,11 @@ import java.util.stream.Collectors;
 
 public class UpdateRankCommand extends FrameworkCommand {
 
-    private final String placeholder;
-    private final List<RankSection> rankSections;
-
     public UpdateRankCommand() {
         super(Configuration.getConfig().getString("command", "updaterank"));
         this.setPermissions("skillranks.updaterank");
         this.setExecutorType(ExecutorType.PLAYER_ONLY);
         this.setRunAsync(false);
-        this.placeholder = SkillRanks.getInstance().getPlaceholder();
-        this.rankSections = SkillRanks.getInstance().getRankSections();
     }
 
     @Override
@@ -35,7 +30,7 @@ public class UpdateRankCommand extends FrameworkCommand {
             return;
         }
         Player player = (Player) cmd.getSender();
-        RankSection rank = this.rankSections.stream()
+        RankSection rank = SkillRanks.getInstance().getRankSections().stream()
                 .filter(x -> x.id().equalsIgnoreCase(args[0]))
                 .findFirst()
                 .orElse(null);
@@ -44,8 +39,14 @@ public class UpdateRankCommand extends FrameworkCommand {
             return;
         }
 
+        boolean force = args.length > 1 && args[1].equalsIgnoreCase("force");
+        if (force && !player.hasPermission("skillranks.updaterank.force")) {
+            Utils.sendMessage(player, Configuration.getConfig().getString("lang.no-permission"));
+            return;
+        }
+
         long ttlMs = Configuration.getConfig().getLong("placeholder-cache-ms", 2000L);
-        RankService.Result result = RankService.updateRank(player, rank, this.placeholder, ttlMs);
+        RankService.Result result = RankService.updateRank(player, rank, ttlMs, force);
         if (result == RankService.Result.UNCHANGED) {
             Utils.sendMessage(player, Configuration.getConfig().getString("lang.nothing-changed"));
         } else if (result == RankService.Result.NO_MATCH) {
@@ -55,7 +56,7 @@ public class UpdateRankCommand extends FrameworkCommand {
 
     @Override
     public List<String> onTabComplete(CommandExecutor cmd) {
-        return this.rankSections.stream()
+        return SkillRanks.getInstance().getRankSections().stream()
                 .filter(x -> x.permission().isEmpty() || cmd.getSender().hasPermission(x.permission()))
                 .map(RankSection::id)
                 .collect(Collectors.toList());
